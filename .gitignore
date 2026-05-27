@@ -1,13 +1,10 @@
-# Pickle files in processed data
-data/processed/*.pkl
+data/**/*.csv
 
 # Draft notebook in notebooks
 notebooks/overall_draft.ipynb
 
 # Draft report
 report/draft_report.pdf
-# Other processed data files (optional, keep .csv for reference)
-# data/processed/*.csv
 
 # Python
 __pycache__/
@@ -37,5 +34,3 @@ env/
 # OS
 .DS_Store
 Thumbs.db
-
-
