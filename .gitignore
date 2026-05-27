@@ -3,6 +3,9 @@ data/processed/*.pkl
 
 # Draft notebook in notebooks
 notebooks/overall_draft.ipynb
+
+# Draft report
+report/draft_report.pdf
 # Other processed data files (optional, keep .csv for reference)
 # data/processed/*.csv
 
