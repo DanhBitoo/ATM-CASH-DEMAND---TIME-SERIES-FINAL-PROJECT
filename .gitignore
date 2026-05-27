@@ -38,8 +38,4 @@ env/
 .DS_Store
 Thumbs.db
 
-# Data files (large files)
-*.xls
-*.xlsx
-*.csv
-data/raw/*
+
