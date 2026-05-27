@@ -23,4 +23,8 @@ NN5-Project/
 │   ├── NN5_report.pdf     # Detailed project analysis report (PDF)
 │   └── figures/           # Auto-generated plots (EDA, SHAP, Actual vs Predicted)
 │
-├── models/                #
+├── models/                # Stored weights of trained models (.pkl, .txt, etc.)
+│
+├── .gitignore             # Files/folders excluded from version control (data/, models/)
+├── README.md              # Project documentation and setup guide (This file)
+└── requirements.txt       # Python dependencies and exact version requirements
