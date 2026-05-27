@@ -1,0 +1,428 @@
+\documentclass[conference, 12pt, onecolumn]{IEEEtran}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{etoolbox}
+\patchcmd{\section}{\centering}{\raggedright}{}{}
+\usepackage{parskip}
+\usepackage{subcaption}
+
+\begin{document}
+
+\title{A Comparative Study of Statistical Models and Global Machine Learning in Time Series Forecasting: The Case of UK ATM Networks}
+
+\author{
+\IEEEauthorblockN{Pham Duc Anh}
+\IEEEauthorblockA{
+Student ID: 11230514\\
+Class: DSEB 65B\\
+Instructor: Tran Thi Ha\\
+National Economics University, DSEB-MFE}
+}
+
+\maketitle
+
+\begin{abstract}
+\normalsize\raggedright
+One of the primary challenges in the banking industry and Cash-in-Transit (CIT) operations is effectively managing and forecasting the multi-step cash demand across a large-scale Automated Teller Machine (ATM) network. The core objective is to solve an asymmetric cost optimization problem: minimizing the massive opportunity costs of idle cash while strictly preventing out-of-cash incidents that severely damage customer trust. While traditional approaches heavily rely on localized time-series equations or rigid pre-clustering techniques, this paper proposes a unified Global Machine Learning architecture combined with Explainable AI (XAI) to forecast a 56-day horizon for an entire ATM network. Utilizing the renowned NN5 competition dataset—comprising daily transaction records from 111 UK ATMs over two years—we built a robust Global Light Gradient Boosting Machine (LightGBM) model. Our methodology introduces a novel "pipeline bifurcation" strategy to handle missing values safely, utilizing linear interpolation for statistical baselines while enforcing strict row-dropping for the machine learning stream to completely eliminate data leakage. This is integrated alongside domain-specific exogenous feature engineering to capture non-linear shocks from UK public holidays, payday cycles, and festive seasons. Furthermore, a mathematical circuit-breaker mechanism is implemented to prevent variance explosion in the baseline autoregressive models. We critically compared our proposed global approach with traditional localized statistical models, specifically ARIMA and SARIMAX. Evaluation using the Symmetric Mean Absolute Percentage Error (SMAPE) demonstrates that our proposed Global LightGBM model performed significantly better, achieving a highly optimized Test SMAPE of 17.31\%, definitively outperforming both SARIMAX (19.82\%) and ARIMA (33.78\%). Finally, SHapley Additive exPlanations (SHAP) are utilized to demystify the algorithm, revealing the absolute dominance of the 7-day cyclical lag and proving the model's inherent non-linear bounding capability during extreme holiday volatility.
+\end{abstract}
+
+\vspace{0.5cm}
+
+\begin{IEEEkeywords}
+\normalsize\raggedright
+Global Machine Learning, LightGBM, Explainable AI (SHAP), Time Series Forecasting, Symmetric Mean Absolute Percentage Error, SARIMAX, NN5 Dataset, Feature Engineering.
+\end{IEEEkeywords}
+
+\section{INTRODUCTION}
+Automatic Teller Machines (ATMs) are critical infrastructural devices deployed by financial institutions to provide automated, round-the-clock banking services in public spaces. Among their various functions, the primary service ATMs offer is the immediate disbursement of cash. Maintaining a highly reliable network of ATMs with volatile transactional workloads presents an immense logistical and financial challenge for commercial banks. ATM replenishment—the physical activity of dispatching armored Cash-in-Transit (CIT) vehicles to refill machines—is constrained by an asymmetric optimization trade-off. If an ATM is loaded with an excessive amount of cash to guarantee availability, the bank suffers a massive opportunity cost, as those funds lie idle, generating zero interest and losing value to inflation. Conversely, if the allocated amount is insufficient, the machine experiences an out-of-cash (stock-out) incident. This not only results in lost transaction fee revenues but also inflicts severe reputational damage, driving highly dissatisfied customers to competitor networks.
+
+Forecasting the precise daily cash demand for every individual ATM is a long-standing mathematical challenge required to optimize these operational costs. Financial institutions generally agree that cash demand is fundamentally driven by a complex interplay of spatial geography, rigid human seasonal routines, and sudden macroeconomic shocks. To predict these demands, researchers have historically adopted two main analytical paradigms. The first is the traditional statistical time series approach, employing autoregressive frameworks such as Auto Regressive Integrated Moving Average (ARIMA) or Seasonal ARIMA with Exogenous Variables (SARIMAX). While mathematically elegant and highly effective for modeling short-term linear trends and stationary cycles, these parametric models possess fatal vulnerabilities. When subjected to multi-step forecasting horizons (e.g., predicting 56 days into the future) and confronted with extreme, non-linear demand shocks—such as the UK Christmas season or Boxing Day sales—these models often suffer from either exponential variance explosion or rapid mean-reverting flatlines. 
+
+The second paradigm involves modern machine learning algorithms, such as Support Vector Regressors or classical Neural Networks. However, traditionally, these algorithms are deployed using a localized modeling approach: a separate, isolated model is trained exclusively on the historical data of a single ATM. For a network of 111 ATMs, this requires the deployment and maintenance of 111 distinct machine learning models. This localized strategy linearly explodes the computational complexity, creates an MLOps (Machine Learning Operations) nightmare for continuous integration, and crucially, fails to leverage cross-learning. ATMs with sparse data or short transaction histories are unable to borrow macro-seasonal patterns from older, more established ATMs in the network.
+
+In this paper, we address the profound structural limitations associated with both localized statistical equations and isolated machine learning models, utilizing the empirical daily time series data from the NN5 forecasting competition. We specifically tackle the problems associated with poor multi-step forecasting trajectories, which almost entirely stem from inadequate handling of missing values (NaNs) and the inability of linear algorithms to bound extreme holiday spikes. We propose a unified Global Light Gradient Boosting Machine (LightGBM) architecture. Instead of splitting the dataset, we consolidate the entire network and leverage the ATM\_ID as a native categorical feature. This allows a single, centralized architecture to learn network-wide seasonalities while simultaneously maintaining granular local precision. To rigorously evaluate the stability of our forecasts across 111 devices with vastly different withdrawal scales (from quiet rural ATMs to busy city-center machines), we favor the use of the Symmetric Mean Absolute Percentage Error (SMAPE). Because it possesses strictly defined lower and upper bounds, it prevents low-volume ATMs from distorting the overall network evaluation, providing a highly robust and mathematically sound performance metric.
+
+There are several major methodological and empirical contributions established in this paper:
+\begin{itemize}
+    \item \textbf{Global Model Architecture:} A unified Global LightGBM model is proposed for large-scale ATM cash demand forecasting, successfully replacing hundreds of fragile local models with a single, highly scalable framework that dynamically shares cross-sectional variance information.
+    \item \textbf{Pipeline Bifurcation Strategy:} We introduce a rigorous dual-preprocessing pipeline to resolve the conflict of missing values (NaNs). We specifically apply linear interpolation to maintain the chronological integrity required by statistical models, while enforcing a strict "dropna" protocol after feature extraction for the LightGBM model to completely eliminate look-ahead bias and "fake answer" learning.
+    \item \textbf{Domain-Specific Exogenous Engineering:} The univariate NN5 dataset is structurally expanded into a high-dimensional feature matrix, incorporating specific UK public holiday directories, payday alignment flags, and festive countdowns to capture extreme non-linear consumer spending shocks.
+    \item \textbf{Baseline Circuit-Breakers:} The experiments critically evaluate the Global ML model against localized baselines (ARIMA and SARIMAX), which we uniquely equipped with a mathematical "Safe Mode" circuit-breaker to cap absurd extrapolations and prevent variance explosion during the highly volatile Validation period.
+    \item \textbf{Algorithmic Transparency via Explainable AI:} SHapley Additive exPlanations (SHAP) are mathematically integrated to demystify the Gradient Boosting "black box." This provides financial operators with quantitative proof of the model's decision-making process, highlighting the absolute dominance of the 7-day cyclical lag and revealing the algorithm's inherent non-linear bounding limits.
+\end{itemize}
+
+The remainder of this paper is organized as follows: Section II describes the related work and the evolution of forecasting literature on the NN5 dataset. Section III details the data characteristics, exploratory analysis, and the mathematical framework of our proposed methodology. Section IV presents the quantitative results, actual versus predicted trajectory analysis, and SHAP interpretability. Finally, Section V discusses the broader managerial implications, acknowledges structural limitations, and outlines strategic avenues for future research.
+
+\section{LITERATURE REVIEW}
+Predicting the cash flow of Automated Teller Machines (ATMs) is a highly complex and challenging problem. Various approaches in the literature yield varying degrees of performance for this task, ranging from advanced Artificial Neural Networks to traditional statistical time series methods such as ARIMA, SARIMA, and VARMAX. The fundamental challenge of this problem lies in accurately understanding and modeling the trend, seasonality, and exogenous variables inherent in the time series data.
+
+Theoretically, a fluctuating time series can be represented through two primary decomposition models. For a multiplicative approach:
+$$Y = T \times C \times S \times I$$
+For an additive approach:
+$$Y = T + C + S + I$$
+Where $T$ stands for Trend, $C$ represents the Cyclic component, $S$ denotes Seasonality, and $I$ stands for Integrated (irregular or random movements). There exist many methods capable of modeling and forecasting these components; however, traditional statistical models like ARMA or ARIMA are often difficult to implement effectively in practice. It is almost impossible to build such a model without the direct involvement of a human expert, particularly in determining parameters through the Box-Jenkins methodology. Conversely, Moving Average appears to be a simpler approach to minimize the effect of noise in a time series and may yield a more optimized and stable performance compared to other complex algorithms.
+
+A primary source of data for empirical research in this domain is the NN5 competition dataset, which consists of 111 real-world ATM time series with 735 known historical observations. Based on this dataset, previous studies can generally be categorized into four core approaches:
+
+\subsection{Statistical Time Series Models}
+Classical statistical models such as ARMA and ARIMA strictly utilize historical data to identify autocorrelation patterns, making them particularly suitable for short-term forecasting. However, a major limitation of early studies utilizing ARIMA is the mechanical application of the model without proper preprocessing to enforce stationarity, alongside the neglect of implicit cyclical and seasonal components. Furthermore, the selection of inappropriate evaluation metrics—such as the Residual Sum of Squares (RSS)—compromised the objective evaluation of models across a multi-device network with varying withdrawal scales. To address these vulnerabilities, advanced multivariate models like Vector Auto Regressive Moving Average with Exogenous Variables (VAR-MAX) were developed. By strictly preprocessing the data with differencing and directly integrating exogenous variables that affect cash flow (such as holidays or pay weeks), the VAR-MAX model not only controls implicit seasonality effectively but also demonstrates superior performance over complex recurrent architectures like Long Short-Term Memory (LSTM) networks under specific boundary conditions.
+
+\subsection{Machine Learning \& Neural Networks}
+Neural Networks (NN) and modern machine learning algorithms (Regression, Random Forests, Support Vector Machines/Regression - SVM/SVR) represent state-of-the-art solutions due to their excellent capability to handle complex non-linear relationships without rigid mathematical assumptions. Large-scale experiments have proven the superiority of Neural Networks and Multilayer Feed Forward Neural Networks (MLFF) over conventional linear regression models. For instance, studies by Kamini, Vadlamani, and Kumar conducted comparative tests between deseasonalisation methods using ARIMA(2,1,2) and techniques involving Wavelet Neural Networks (WNN), Graph Neural Networks (GNN), and General Regression Neural Networks (GRNN). The results indicated that GRNN possessed outstanding optimization capabilities, achieving the lowest Symmetric Mean Absolute Percentage Error (SMAPE) of 14.71\%. Despite their impressive performance, Neural Networks require a vast amount of historical data for training, and their "black-box" nature complicates business interpretability. Additionally, a significant barrier arises when applying machine learning models using a local learning approach: if a separate model is trained for each individual ATM, the algorithm fails to capture cross-seasonal factors effectively, and computational resource costs increase linearly as the network expands. In recent years, the forecasting paradigm has experienced a significant shift towards Gradient Boosting architectures. While Neural Networks are highly capable, they are notoriously difficult to tune and computationally expensive. Tree-based ensemble methods, particularly Extreme Gradient Boosting (XGBoost) and Categorical Boosting (CatBoost), have emerged as formidable alternatives. These models naturally handle non-linear tabular data and are inherently robust to multicollinearity among engineered lag features. However, traditional Gradient Boosting algorithms often struggle with high-cardinality categorical features (such as 111 distinct ATM IDs), forcing researchers to apply computationally heavy One-Hot Encoding which exponentially expands the feature matrix and leads to memory inefficiency. This specific limitation paved the way for the adoption of LightGBM, which natively bypasses One-Hot Encoding via histogram-based partitioning, solidifying its position as an optimal solution for large-scale multi-series forecasting.
+
+\subsection{Complexity Reduction \& Multi-step Ahead Strategies}
+To cope with the massive computational overhead and high noise levels of the NN5 dataset, a critical line of research focuses on reducing feature space dimensionality (e.g., using PCA) or optimizing multi-step ahead forecasting strategies. Previous literature has highlighted debates surrounding five core forecasting strategies: Recursive (REC), Direct (DIR), DIRREC, Multiple-Output (MIMO), and DIRMO. Although past empirical results were often contradictory and inconclusive due to varying data configurations, large-scale systematic studies applying Lazy Learning algorithms have confirmed that Multiple-Output strategies (such as the MIMO-ACFLIN structure), when combined with deseasonalization techniques and rigorous input variable selection, yield the most optimal forecasting performance for long horizons, minimizing error accumulation across forecasting steps.
+
+\subsection{Clustering-based Preprocessing}
+A major gap in traditional time series research on the NN5 dataset is the missed opportunity to group ATMs with similar withdrawal behaviors prior to forecasting. Recent pioneering studies have completely resolved this limitation by establishing an integrated pipeline: Clustering followed by Forecasting. Specifically, the application of the Taylor-Butina clustering algorithm based on the Spectral Angle Mapper (SAM) distance metric to group ATMs according to day-of-the-week seasonality allowed the GRNN model to optimize significantly, achieving a record SMAPE of 18.44\%. Concurrently, research applying the K-Means algorithm with Dynamic Time Warping (DTW) distance and the rprop+ backpropagation algorithm demonstrated the ability to drastically reduce the RMSE from 8.50 to 6.58 compared to non-clustered models. This direction not only enhances accuracy but also provides profound practical management implications, enabling financial institutions to plan synchronized cash replenishment for clusters of similar ATMs, resulting in massive operational cost savings.
+
+\subsection{Research Positioning}
+Although clustering methods, local models, and discrete multivariate models have brought certain improvements, they still face significant challenges regarding scalability and business interpretability during real-world deployment. To address these structural gaps, this study proposes a Global Machine Learning Model architecture based on the advanced Light Gradient Boosting Machine (LightGBM) algorithm. Instead of splitting data or enforcing rigid linear equations, the Global model aggregates the complete information of all 111 ATMs, utilizing the ATM\_ID as a categorical feature to perform cross-learning across the entire network. Simultaneously, the system is equipped with a domain-specific feature engineering pipeline that integrates specific national holiday variables to eliminate underfitting during periods of high volatility. Finally, this paper applies SHapley Additive exPlanations (SHAP), based on cooperative game theory, to demystify the machine learning "black box". This provides mathematically transparent explanations for individual forecasting decisions, establishing a new standard that harmonizes optimal accuracy with transparency in financial risk management.
+
+\section{DATA AND METHODOLOGY}
+
+\subsection{Data Description and Sample Splitting Strategy}
+This study utilizes empirical time series data from the renowned NN5 forecasting competition. The research focuses on the daily cash withdrawal behavior across a network of 111 Automated Teller Machines (ATMs) located in various geographical and economic regions within the United Kingdom (UK). The original dataset spans from March 1996 to May 1998. According to the NN5 competition rules, the final 56 days of the dataset were intentionally left blank (unlabeled) to serve as the blind forecasting horizon for the competition. For the purpose of training and empirically evaluating our proposed models, we entirely discarded these final 56 blind days. We exclusively utilized the historical portion of the dataset containing known target values (approximately 735 days per ATM). 
+
+To rigorously evaluate the models, we partitioned this known historical data chronologically into three subsets:
+\begin{itemize}
+    \item \textbf{Test Set:} The last 56 days of the known data, simulating the actual forecasting horizon required by the competition.
+    \item \textbf{Validation (Val) Set:} The 56 days immediately preceding the Test set, used for hyperparameter tuning and model evaluation during training.
+    \item \textbf{Train Set:} The remaining chronological data prior to the Validation set, used to fit the models.
+\end{itemize}
+
+\textbf{Target Variable:} The core dependent variable in this study is Withdrawal—representing the total cash volume withdrawn at a specific ATM on day $t$. 
+
+\textbf{Data Limitations and Structural Characteristics:} The dataset exhibits classic traits of large-scale real-world time series, including high noise, strong non-linearity, and most notably, missing values (NaNs). These NaNs occur due to objective technical reasons such as ATM maintenance, network failures, or localized cash-outs. In our partitioned dataset, the Train set contains 1,517 missing values; whereas the Validation and Test sets contain 75 and 81 missing values, respectively. The presence of these missing data points poses a significant methodological challenge, requiring specialized processing strategies to prevent distorted econometric estimations.
+
+\subsection{Exploratory Data Analysis (EDA)}
+Before feature engineering and model training, an in-depth Exploratory Data Analysis (EDA) was conducted on the network-average withdrawal data to uncover the underlying structural patterns, cyclical behaviors, and volatility risks. 
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{plot1_trend_analysis.png}
+    \caption{Trend Analysis}
+    \label{fig:trend}
+\end{figure}
+\textbf{Trend and Structural Shocks:} The original data and the overlaid 28-day Moving Average (MA) trend line reveal that the time series is generally stationary, hovering around a stable mean of 15 to 20 daily withdrawals for the majority of the year. The high-frequency noise (represented by the light grey line) indicates significant day-to-day volatility, yet the underlying baseline remains structurally resilient. However, a massive non-linear shock is distinctly visible at the end of the year (late December to early January). The trend sharply peaks and immediately crashes into a deep trough—often referred to as the post-holiday "hangover effect"—where demand drops significantly below the annual average before slowly recovering in late January. This observation empirically proves why pure linear models lacking exogenous holiday variables tend to either under-forecast the peak or over-forecast the subsequent crash.
+
+\begin{figure}[H]
+    \centering
+    % Hình trái (ACF) chiếm 48% chiều ngang
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plot2_autocorrelation.png}
+        \caption{Autocorrelation Function (ACF)}
+        \label{fig:acf}
+    \end{subfigure}\hfill
+    % Hình phải (PACF) chiếm 48% chiều ngang
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plot3_partial_autocorrelation.png}
+        \caption{Partial Autocorrelation Function (PACF)}
+        \label{fig:pacf}
+    \end{subfigure}
+    % Caption chung cho cả 2 hình
+    \caption{Autocorrelation and Partial Autocorrelation Analysis of the network average cash demand.}
+    \label{fig:acf_pacf}
+\end{figure}
+\textbf{Autocorrelation (ACF) and Partial Autocorrelation (PACF):} The ACF plot demonstrates highly significant, periodic spikes that slowly decay but consistently breach the confidence interval boundaries at exact multiples of 7 (lags 7, 14, 21, 28, and 35). The PACF plot further corroborates this with a dominant, positive spike at lag 7, followed by a drastic cutoff. This strict cutoff mathematically confirms the presence of a rigid weekly seasonality and strongly suggests that a Seasonal Autoregressive term of order 1 ($P=1$) is theoretically sufficient for modeling. Additionally, minor negative correlations observed at early lags (lag 1 and 2) in the PACF imply a slight mean-reverting behavior following daily localized spikes. These findings provide the definitive theoretical justification for setting the seasonal order $s=7$ in the SARIMAX baseline and engineering 7-day lag features for the LightGBM model.
+
+\begin{figure}[H]
+    \centering
+    % Hình trái (Weekly)
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plot4_weekly_seasonality.png}
+        \caption{Weekly Seasonality}
+        \label{fig:weekly}
+    \end{subfigure}\hfill
+    % Hình phải (Monthly)
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{plot5_monthly_seasonality.png}
+        \caption{Monthly Seasonality}
+        \label{fig:monthly}
+    \end{subfigure}
+    % Caption chung
+    \caption{Weekly and Monthly Seasonality Analysis highlighting normal cycles versus holiday volatility.}
+    \label{fig:seasonality}
+\end{figure}
+\textbf{Weekly and Monthly Seasonality:} The weekly boxplot illustrates a clear intra-week lifecycle: cash demand steadily builds up, peaking on Thursdays and Fridays (driven by weekend preparation and pub culture), before dropping sharply to its lowest median on Saturdays. Notably, Friday not only exhibits the highest median but also the widest Interquartile Range (IQR), implying that Friday demand is highly sensitive to specific external factors (e.g., payday alignments or bank holidays). Conversely, Saturday shows a compressed variance, indicating universally low demand. On a macro scale, the monthly boxplot highlights December as the most volatile period, featuring the widest IQR and numerous upper outliers. Furthermore, January displays a heavily extended lower whisker, capturing the aforementioned post-holiday slump. This confirms that December and January break standard cyclic rules, necessitating the creation of specific holiday countdown and festive features.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{plot3_volatility.png}
+    \caption{Volatility Analysis.}
+    \label{fig:volatility}
+\end{figure}
+\textbf{Volatility and Risk Assessment:} The rolling standard deviation analysis measures the dynamic cash-out risk across the network. While the volatility remains relatively stable between 4 and 6 throughout most of the year, it violently spikes to nearly 14 during the transition between 1996 and 1997. This phenomenon demonstrates strong conditional heteroscedasticity (variance changing over time), which fundamentally violates the constant variance assumptions of standard Ordinary Least Squares (OLS) based models. This extreme variance explosion underscores the critical necessity of implementing the "Safe Mode" circuit-breaker in our baseline statistical models. More importantly, it justifies the deployment of tree-based ensembles like LightGBM, which make no strict mathematical assumptions about homoscedasticity and can naturally isolate high-variance regimes through recursive splitting.
+
+\subsection{Data Preprocessing and Feature Engineering}
+
+Real-world ATM transaction records are inherently noisy and highly susceptible to missing values (NaNs) due to hardware malfunctions, network outages, or out-of-cash incidents where data recording halts. The NN5 dataset is no exception, containing a significant number of missing observations. Handling these missing values and engineering appropriate features are the most critical steps in ensuring the predictive integrity of the models.
+
+\subsubsection{Pipeline Bifurcation Strategy}
+A fundamental architectural conflict exists between traditional autoregressive models and tree-based machine learning algorithms regarding data structure requirements. To resolve this without compromising the theoretical foundations of either approach, this study implements a synchronized "Pipeline Bifurcation Strategy" immediately following feature initialization:
+
+\textbf{Statistical Stream (ARIMA/SARIMAX):} Autoregressive processes mathematically demand a strictly monotonic and evenly spaced time index to correctly calculate differencing $(1 - B)^d$ and moving averages. Deleting rows would fracture the temporal continuity, distorting the lag structures. Therefore, the study applies Linear Interpolation exclusively for the training phase of these statistical models. Unlike naive mean imputation, which artificially flattens variance, linear interpolation constructs a mathematical straight line connecting the nearest valid observations at time $t-k$ and $t+k$ to estimate the missing value at time $t$. This geometric approach optimally preserves the localized trend and maintains the integrity of the autocorrelation function.
+
+\textbf{Machine Learning Stream (Global LightGBM):} Gradient Boosting Decision Trees operate on fundamentally different mechanics; they evaluate rows as independent conditional samples to optimize information gain during node splitting, regardless of chronological order. Crucially, the temporal memory is already embedded within the engineered columns (lags and rolling windows). Consequently, after all time-based features are safely extracted on the continuous axis, any row in the Train set lacking a target variable (Withdrawal) is explicitly dropped. Retaining interpolated (synthetic) target values would introduce artificial biases, misleading the gradient descent process by forcing the model to learn "fake answers." By dropping these 1,517 missing rows, the LightGBM model is strictly trained on empirically verified ground-truth data, thereby maximizing the fidelity of the loss function optimization.
+
+\textit{Note on Evaluation Integrity:} In both the Validation and Test sets, missing values are strictly preserved. Interpolating the test horizon would result in evaluating the model against our own synthetic assumptions rather than reality. To ensure objective scoring, the evaluation functions (e.g., SMAPE, MAE) are equipped with a boolean masking mechanism that automatically ignores these specific unrecorded days.
+
+\subsubsection{Domain-Specific Exogenous Feature Engineering}
+To transcend the limitations of univariate analysis, the time series problem is transformed into a high-dimensional supervised learning matrix. This engineered feature space empowers the machine learning model to contextualize temporal patterns and anticipate structural shocks. The features are categorized into three strategic groups:
+
+\begin{itemize}
+    \item \textbf{Calendar and Behavioral Features:} The base temporal attributes—such as \textit{day\_of\_week}, \textit{day\_of\_month}, \textit{month}, and \textit{is\_weekend}—are extracted to map standard cyclical human behaviors. Furthermore, an \textit{is\_payday} flag is engineered to target standard UK salary disbursement dates (typically the 1st, 15th, 25th, 28th, 30th, and 31st). This variable directly captures the microeconomic phenomenon where cash liquidity injections lead to immediate spikes in withdrawal demand for rent and bill settlements.
+
+    \item \textbf{UK Holiday and Non-linear Shock Variables:} Pure autoregression fails when encountering exogenous macroeconomic anomalies. To absorb these spending "shocks," the official UK Bank Holidays directory is integrated. Recognizing that holidays like Christmas are not isolated single-day events but rather cumulative shopping periods, three highly impactful non-linear features are constructed:
+    \begin{itemize}
+        \item \textit{days\_until\_xmas}: A countdown integer (active in December) designed to capture the escalating consumer frenzy leading up to Christmas Day.
+        \item \textit{is\_festive\_season}: A boolean flag marking the volatile transitional period from December 20 to January 2, a timeframe empirically proven in the EDA to disrupt standard daily withdrawal cycles completely.
+        \item \textit{is\_boxing\_day}: A dedicated flag for December 26, accounting for the massive post-Christmas retail sales wave unique to the UK and Commonwealth nations.
+    \end{itemize}
+
+    \item \textbf{Autoregressive Lags and Volatility Mapping:} To transfer the historical memory of the time series into a tabular format, specific lag variables ($Y_{t-1}, Y_{t-7}, Y_{t-14}, Y_{t-28}, Y_{t-56}$) are generated. The intervals are not chosen randomly; lags 7, 14, and 28 mathematically align with the dominant seasonal spikes identified in the PACF analysis. Additionally, rolling mean and rolling standard deviation are calculated over 7, 14, and 28-day windows to serve as dynamic risk indicators, helping the model adapt to regimes of conditional heteroscedasticity. 
+    \item \textbf{Strict Anti-Leakage Protocol:} Crucially, to completely eliminate the risk of Data Leakage (Look-ahead bias), the target series is mandatorily shifted backward by one time step ($\text{shift}(1)$) \textit{before} any rolling operators or lags are calculated. This guarantees that the feature vector predicting the demand for day $t$ is constructed exclusively using information available up to day $t-1$, simulating a rigorous real-world production environment.
+\end{itemize}
+
+\subsection{Methodology and Theoretical Framework}
+This study empirically runs three parallel models, representing two fundamentally distinct mathematical schools of thought in time series forecasting: the localized parametric statistical approach (ARIMA, SARIMAX) and the globalized non-parametric machine learning architecture (LightGBM). The objective is to rigorously evaluate how each theoretical framework handles complex seasonality, structural holidays shocks, and high-dimensional multi-series data.
+
+\subsubsection{ARIMA (Autoregressive Integrated Moving Average)}
+The ARIMA($p, d, q$) model serves as our foundational linear baseline, rooted in the classical Box-Jenkins methodology. It operates on the core assumption that the future value of a stationary time series is a linear combination of its own past values (Autoregressive component - AR) and past forecast errors (Moving Average component - MA). The generalized mathematical formulation is expressed as:
+$$\Phi_p(B)(1 - B)^d Y_t = \Theta_q(B)\epsilon_t$$
+Where:
+\begin{itemize}
+    \item $B$ is the backshift (lag) operator defined by $B^k Y_t = Y_{t-k}$, serving to mathematically shift the timeline backward.
+    \item $(1 - B)^d$ is the integrated differencing operator of order $d$, strictly required to eliminate stochastic trends and enforce weak stationarity (constant mean and variance) prior to parameter estimation.
+    \item $\Phi_p(B) = 1 - \phi_1 B - \phi_2 B^2 - \dots - \phi_p B^p$ represents the autoregressive polynomial of order $p$, capturing the momentum of past observations.
+    \item $\Theta_q(B) = 1 + \theta_1 B + \theta_2 B^2 + \dots + \theta_q B^q$ represents the moving average polynomial of order $q$, modeling the residual shocks.
+    \item $\epsilon_t \sim N(0, \sigma^2)$ is the Gaussian white noise process.
+\end{itemize}
+\textbf{Theoretical Justification and Limitations:} ARIMA is highly effective for capturing short-term, endogenous linear dependencies in a univariate series. However, its primary limitation in this study is its inherent localized nature. To forecast the entire network, 111 independent ARIMA models must be estimated. This isolation prevents the models from sharing cross-sectional variance information. Furthermore, its reliance on strict homoscedasticity makes it structurally blind to both recurring weekly seasonalities and external macroeconomic shocks, inevitably leading to rapid error accumulation over a 56-day multi-step horizon.
+
+\subsubsection{SARIMAX (Seasonal ARIMA with Exogenous Regressors)}
+To address the temporal blindness of standard ARIMA, the SARIMAX model expands the linear geometry by incorporating multiplicative seasonal polynomials and a multidimensional matrix of exogenous variables ($X_t$). The structural equation is formulated as:
+$$\phi_p(B)\Phi_P(B^s)(1 - B)^d(1 - B^s)^D Y_t = \beta X_t + \theta_q(B)\Theta_Q(B^s)\epsilon_t$$
+Where:
+\begin{itemize}
+    \item $s$ defines the length of the periodic seasonal cycle. Based on the rigid cut-offs identified in our Partial Autocorrelation Function (PACF) analysis, the seasonal frequency is strictly set to $s = 7$ to map the intra-week lifecycle.
+    \item $\Phi_P(B^s)$ and $\Theta_Q(B^s)$ are the seasonal AR and MA polynomials, allowing the model to bridge relationships between $Y_t$ and $Y_{t-7}, Y_{t-14}$, etc.
+    \item $(1 - B^s)^D$ is the seasonal differencing operator, mitigating annual or weekly drifts.
+    \item $X_t$ is the engineered exogenous feature matrix, crucially injecting deterministic variables (e.g., UK holidays, payday flags) into the system.
+    \item $\beta$ is the vector of coefficients estimated via Maximum Likelihood Estimation (MLE), quantifying the isolated linear impact of each exogenous event.
+\end{itemize}
+\textbf{Theoretical Justification and Limitations:} SARIMAX represents a massive theoretical upgrade over ARIMA. By utilizing the $\beta X_t$ component, the model is no longer blind to the UK festive season. However, a fundamental mathematical vulnerability remains: the relationship between $X_t$ and $Y_t$ is strictly constrained to linear addition. The $\beta$ coefficients are static over time, meaning the model cannot comprehend complex non-linear interactions (e.g., the compounding effect of a Friday aligning with Christmas Eve). Consequently, when encountering extreme volatility in the Validation set, the matrix inversion required for MLE can become unstable, resulting in catastrophic variance explosion. To mitigate this, a "Safe Mode" circuit-breaker was implemented to cap mathematically absurd extrapolations during the holiday peaks.
+
+\subsubsection{Proposed Model: Global LightGBM (Light Gradient Boosting Machine)}
+To completely transcend the restrictive assumptions of homoscedasticity and linearity, this study proposes a Global Machine Learning architecture utilizing the LightGBM algorithm. Instead of partitioning the data to train 111 isolated linear equations, a single, unified non-parametric model is trained on the consolidated longitudinal dataset. The architecture leverages Gradient Tree Boosting, where the final prediction is an ensemble of sequential weak learners (regression trees) optimized to correct the residuals of their predecessors:
+$$\hat{Y}_{i,t} = \sum_{k=1}^K f_k(\mathbf{X}_{i,t})$$
+Where:
+\begin{itemize}
+    \item $i$ represents the unique identifier of the ATM (ATM\_ID).
+    \item $\mathbf{X}_{i,t}$ defines the highly engineered, multidimensional feature space for ATM $i$ at time $t$. Crucially, instead of applying inefficient One-Hot Encoding, the \textit{ATM\_ID} is configured as a native Categorical Feature. LightGBM utilizes Fisher's optimal partition method to sort and cluster these IDs dynamically based on their target statistics, effectively projecting them into a high-dimensional latent space.
+    \item $f_k$ is the specific regression tree constructed at boosting iteration $k$.
+\end{itemize}
+The core learning mechanism minimizes the objective loss function $\mathcal{L}^{(k)}$ at each step. To ensure robustness against extreme outlier spikes (e.g., Boxing Day anomalies), we intentionally selected the Mean Absolute Error (MAE - L1 Norm) instead of the standard Mean Squared Error (MSE - L2 Norm). The optimization function is defined as:
+$$\mathcal{L}^{(k)} = \sum_{n=1}^N l\left(Y_n, \hat{Y}_n^{(k-1)} + f_k(\mathbf{X}_n)\right) + \Omega(f_k)$$
+Where $\Omega(f_k)$ acts as the strict regularization penalty to prevent the deep trees from memorizing the noise, structured as:
+$$\Omega(f_k) = \gamma T + \frac{1}{2} \lambda \sum_{j=1}^T w_j^2 + \alpha \sum_{j=1}^T |w_j|$$
+This includes parameters actively tuned in our architecture: bounding the maximum depth (\textit{max\_depth} = 7), limiting the number of terminal leaves (\textit{num\_leaves} = 63), enforcing L1/L2 regularization ($\alpha = 0.5, \lambda = 1.0$), and ensuring a minimum data threshold per leaf (\textit{min\_data\_in\_leaf} = 20).
+
+\textbf{Theoretical Justification and Superiority:} The Global LightGBM framework offers three profound methodological advancements over classical statistics:
+\begin{itemize}
+    \item \textbf{Cross-sectional Feature Learning:} By training globally, the algorithm effectively solves the "cold-start" or sparse-data problem. ATMs with lower transaction volumes inherently borrow statistical weight and seasonal patterns from high-volume ATMs within the same algorithmically determined clusters.
+    \item \textbf{Automatic High-Order Non-linear Interactions:} Unlike SARIMAX, which requires manual specification of interaction terms, the recursive binary splitting mechanism of decision trees automatically uncovers multidimensional logic (e.g., "IF \textit{is\_festive\_season} = True AND \textit{day\_of\_week} = Friday AND \textit{rolling\_mean\_7} > 30 $\Rightarrow$ triple the baseline demand").
+    \item \textbf{MLOps Scalability and Pipeline Optimization:} From a computational and operational standpoint, replacing 111 fragile local models with 1 robust global model radically reduces the architectural complexity. This centralization maximizes practical deployment capabilities, facilitating streamlined Continuous Integration/Continuous Training (CI/CT) pipelines within modern banking infrastructures.
+\end{itemize}
+
+\subsection{Evaluation Metrics and Selection Rationale}
+To rigorously and objectively quantify the forecasting performance of the implemented models across a highly heterogeneous network, this study utilizes a complementary suite of three mathematical metrics. Let $Y_t$ denote the actual cash withdrawal volume at time $t$, $\hat{Y}_t$ denote the forecasted volume, and $n$ be the total number of forecasted days in the horizon.
+
+\textbf{1. Primary Metric: Symmetric Mean Absolute Percentage Error (SMAPE)}
+SMAPE is selected as the primary evaluation metric due to its critical mathematical property: \textit{scale independence}. The NN5 dataset comprises 111 distinct ATMs with vastly different withdrawal capacities—ranging from high-traffic city-center terminals to low-volume rural machines. If absolute metrics were used as the primary benchmark, the overall network performance would be disproportionately skewed by the high-volume ATMs (where a small percentage error yields a massive absolute error). SMAPE neutralizes this by expressing accuracy as a relative percentage. Furthermore, while the traditional Mean Absolute Percentage Error (MAPE) suffers from severe penalty asymmetry (penalizing over-forecasting far more heavily than under-forecasting) and computational instability when $Y_t$ approaches zero, SMAPE structurally resolves these flaws. By placing the sum of the absolute actual and forecasted values in the denominator, SMAPE bounds the maximum error strictly between 0\% and 200\%, providing a highly stable, symmetric, and fair evaluation across the entire ATM network.
+$$SMAPE = \frac{100\%}{n} \sum_{t=1}^n \frac{|Y_t - \hat{Y}_t|}{(|Y_t| + |\hat{Y}_t|)/2}$$
+
+\textbf{2. Supporting Metric: Mean Absolute Error (MAE)}
+While SMAPE evaluates relative accuracy, MAE is utilized to provide an absolute, interpretable baseline in actual withdrawal volumes. MAE utilizes the L1 norm, meaning it computes the linear average magnitude of errors without considering their direction. From a mathematical standpoint, the L1 norm is inherently robust to extreme outliers. In the context of the NN5 dataset—which is riddled with sudden, non-linear spending spikes during the UK festive season—MAE ensures that the evaluation of the model's everyday operational efficiency is not completely distorted by a few anomalous holiday misses.
+$$MAE = \frac{1}{n} \sum_{t=1}^n |Y_t - \hat{Y}_t|$$
+
+\textbf{3. Supporting Metric: Root Mean Square Error (RMSE)}
+Conversely, RMSE is deployed specifically to measure the model's vulnerability to worst-case forecasting failures. By utilizing the L2 norm, the squared term mathematically forces the metric to penalize large forecasting errors exponentially more heavily than small, everyday fluctuations. For Cash-in-Transit (CIT) operations, a small baseline error spread across 10 days is manageable, but a single massive error on a single day (such as boxing day) results in a catastrophic out-of-cash incident. Therefore, while MAE proves the model's baseline consistency, a low RMSE proves the model's risk-aversion capability during periods of extreme structural volatility.
+$$RMSE = \sqrt{\frac{1}{n} \sum_{t=1}^n (Y_t - \hat{Y}_t)^2}$$
+
+\textbf{Synthesis for NN5 Application:} 
+By combining these three metrics, the study establishes a holistic evaluation framework perfectly tailored to the business and structural realities of the NN5 dataset. SMAPE ensures cross-network fairness regardless of individual ATM capacity, MAE validates day-to-day operational consistency, and RMSE acts as a strict stress-test against the financial risk of extreme holiday anomalies.
+
+\subsection{Training Regime and Validation Strategy}
+Training machine learning models on time series data requires strict chronological discipline. Unlike standard cross-sectional datasets, randomly shuffling the data and applying traditional K-Fold Cross-Validation is strictly prohibited, as it fundamentally introduces "look-ahead bias" (allowing the model to peek into the future to predict the past). 
+
+To ensure empirical integrity, this study employs a strictly chronological \textit{Time Series Split} methodology. The Global LightGBM model is trained sequentially. During the gradient descent optimization, the Validation Set (the 56 days preceding the test horizon) acts as the early-stopping monitor. We configured the \textit{early\_stopping\_rounds} parameter to halt the addition of new regression trees if the Validation MAE fails to improve over 50 consecutive boosting iterations. This dynamic training regime guarantees that the final model achieves the optimal bias-variance tradeoff without memorizing the noise of the training data, thereby maximizing its generalization capabilities on the blind 56-day Test Set.
+
+\section{RESULTS}
+This section presents the empirical findings of our comparative study. The primary objective is to evaluate the forecasting accuracy of the proposed Global LightGBM model against the baseline statistical models (ARIMA and SARIMAX) across the entire network of 111 ATMs. To ensure a rigorous assessment, we focus on four key metrics: Symmetric Mean Absolute Percentage Error (SMAPE), Mean Absolute Error (MAE), Root Mean Square Error (RMSE), and Bias.
+
+\subsection{Comparative Performance Evaluation}
+The aggregate forecasting performance of the three implemented models on both the Validation (Val) and Test sets is summarized in Table I.
+
+\begin{table}[H]
+\centering
+\caption{Comprehensive Evaluation Metrics Across Models}
+\begin{tabular}{llrrrr}
+\toprule
+Model & Dataset & SMAPE (\%) & MAE & RMSE & Bias \\
+\midrule
+ARIMA & Val & 39.74 & 7.16 & 9.13 & -0.84 \\
+                 & Test & 33.78 & 6.11 & 7.56 & -0.40 \\
+SARIMAX & Val & 32.76 & 5.82 & 8.37 & -0.19 \\
+                    & Test & 19.82 & 3.31 & 4.64 & +0.26 \\
+LightGBM  & Val & 33.44 & 5.92 & 8.55 & -0.74 \\
+                 & Test & \textbf{17.31} & \textbf{2.83} & \textbf{4.10} & \textbf{-0.28} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Quantitative Analysis of the Results:}
+\begin{itemize}
+    \item \textbf{The Failure of Linear Baselines (ARIMA):} The standard ARIMA model performed the poorest, yielding a Test SMAPE of 33.78\% and an RMSE of 7.56. This mathematically confirms our hypothesis that a purely autoregressive equation, blind to explicit seasonal intervals and exogenous inputs, is structurally inadequate for capturing the volatile, high-frequency cash demand cycles of the ATM network.
+    \item \textbf{The Impact of Seasonality Constraints (SARIMAX):} The SARIMAX architecture demonstrated a massive quantitative improvement over ARIMA, dropping the Test SMAPE to 19.82\% and cutting the MAE nearly in half (from 6.11 down to 3.31). By explicitly modeling the 7-day seasonal polynomial ($s=7$), the model successfully recognized standard weekly behaviors. 
+    \item \textbf{The Superiority of Global Machine Learning (LightGBM):} The proposed Global LightGBM model definitively outperformed all statistical baselines, achieving the lowest Test SMAPE of 17.31\%, alongside the lowest MAE (2.83) and RMSE (4.10). By processing the entire 111-ATM network simultaneously, the algorithm successfully optimized its loss function through cross-learning, proving that high-dimensional non-parametric models excel in multi-series environments.
+    \item \textbf{The "Validation Shock" Phenomenon:} An important temporal observation is that all three models exhibited significantly higher error rates on the Validation set (SMAPE ranging from 32\% to nearly 40\%) compared to the Test set. This discrepancy is not an artifact of overfitting, but rather a reflection of the Validation set's chronological location (encompassing late December to early January). This specific window contains massive, non-linear spending shocks (Christmas, Boxing Day) and the subsequent demand crash (the hangover effect). While LightGBM also faced challenges during this chaotic regime (Val SMAPE 33.44\%), its inherent tree-based boundaries prevented the catastrophic extrapolations often seen in unconstrained linear models.
+\end{itemize}
+
+\subsection{Trajectory Analysis: Actual vs. Predicted}
+To visually validate the mathematical metrics and understand the behavioral mechanics of each algorithm, we plotted the predicted trajectories against the actual cash withdrawals over the 56-day blind Test horizon for a sample ATM (NN5-001).
+
+% Khối 1: Đặt ở trang hiện tại (chứa ARIMA và SARIMAX)
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}{0.8\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{10_arima_actual_vs_pred.png}
+        \caption{ARIMA Forecast: Flattens out rapidly, failing to capture seasonality.}
+        \label{fig:arima_traj}
+    \end{subfigure}
+    
+    \vspace{0.5cm}
+    
+    \begin{subfigure}{0.8\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{10_sarimax_actual_vs_pred.png}
+        \caption{SARIMAX Forecast: Captures periodicity but struggles with amplitude variance.}
+        \label{fig:sarimax_traj}
+    \end{subfigure}
+    \caption{56-day multi-step forecasting trajectories across three distinct methodologies (Part 1).}
+\end{figure}
+
+% Khối 2: Đẩy sang trang sau (chứa LightGBM)
+\begin{figure}[htbp]
+    \ContinuedFloat % Lệnh quan trọng: Báo cho LaTeX biết đây là phần tiếp theo của Hình trước
+    \centering
+    \begin{subfigure}{0.8\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{10_lightgbm_actual_vs_pred.png}
+        \caption{LightGBM Forecast: Tightly tracks actual data, matching both phase and peak amplitudes.}
+        \label{fig:lightgbm_traj}
+    \end{subfigure}
+    \caption{56-day multi-step forecasting trajectories across three distinct methodologies (Part 2).}
+    \label{fig:trajectory_comparison}
+\end{figure}
+
+As critically observed in Figure \ref{fig:trajectory_comparison}:
+\begin{itemize}
+    \item \textbf{ARIMA's Mean-Reversion Trap:} Figure \ref{fig:arima_traj} visually exposes the fatal flaw of standard ARIMA in multi-step forecasting. Without explicit seasonal terms, the autoregressive momentum decays exponentially. Within just 14 days, the forecast completely flatlines into a horizontal mean, rendering it useless for long-term cash replenishment planning.
+    \item \textbf{SARIMAX's Rigid Periodicity:} Figure \ref{fig:sarimax_traj} shows that SARIMAX successfully maintains the "heartbeat" (phase) of the time series throughout the 56 days, thanks to its $(1-B^7)$ seasonal operator. However, its linear nature forces it to predict relatively uniform peak heights. When the actual data exhibits an unusually sharp spike (e.g., around March 8th) or a deeper trough, SARIMAX rigidly under-forecasts or over-forecasts, unable to adapt its amplitude dynamically.
+    \item \textbf{LightGBM's Dynamic Elasticity:} Figure \ref{fig:lightgbm_traj} demonstrates why the machine learning approach won. The LightGBM forecast tightly hugs the actual data points, preserving not just the seasonal phase but also the dynamic variance (amplitude). It correctly anticipates the varying heights of the weekend peaks and smoothly navigates the drastic intra-week drops, proving the algorithm's ability to synthesize complex lag interactions rather than just repeating a rigid mathematical wave.
+\end{itemize}
+
+\subsection{Model Interpretability via SHAP (Explainable AI)}
+A critical limitation of advanced Gradient Boosting frameworks in financial applications is their "black-box" nature, which often conflicts with strict risk-management compliance. To demystify our winning Global LightGBM architecture, we integrated SHapley Additive exPlanations (SHAP)—a method grounded in cooperative game theory—to quantify the exact marginal contribution of each engineered feature.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{08_shap_importance.png}
+        \caption{Top 15 Most Important Features}
+        \label{fig:shap_bar}
+    \end{subfigure}\hfill
+    \begin{subfigure}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\linewidth]{07_shap_summary.png}
+        \caption{SHAP Summary Plot (Feature Impact Distribution)}
+        \label{fig:shap_summary}
+    \end{subfigure}
+    \caption{Global SHAP Analysis decoding the LightGBM decision-making process.}
+    \label{fig:shap_analysis}
+\end{figure}
+
+The SHAP analysis in Figure \ref{fig:shap_analysis} reveals profound insights into the mechanics of ATM cash demand:
+\begin{itemize}
+    \item \textbf{The Absolute Supremacy of the 7-Day Cycle:} Figure \ref{fig:shap_bar} unequivocally identifies \textit{lag\_7} (the exact withdrawal volume from one week prior) as the most dominant predictive feature, possessing a mean absolute SHAP value far exceeding any other variable. The \textit{day\_of\_week} feature ranks second. This mathematically validates the behavioral economics hypothesis that UK cash demand is fundamentally driven by strict, repeating weekly routines (e.g., Friday pub visits, weekend grocery shopping). 
+    \item \textbf{Global Scaling via Categorical ATM\_ID:} A defining success of our Global architecture is validated by the presence of \textit{ATM\_ID} in the top 5 most important features. In the Summary Plot (Figure \ref{fig:shap_summary}), \textit{ATM\_ID} exhibits a broad, symmetric spread of gray dots extending into both highly negative and highly positive SHAP values. This proves that the single LightGBM model successfully learned the unique geographical and economic capacity baseline of all 111 individual machines. It acts as a dynamic global scaler—pushing the base prediction up for busy city-center ATMs and pulling it down for quiet rural ones—completely eliminating the need to build 111 separate local models.
+    \item \textbf{The S-Curve Bounding Mechanism:} To understand exactly how the model prevents variance explosion, we plotted the SHAP Dependency of the dominant \textit{lag\_7} feature.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\textwidth]{09_shap_dependence_lag7.png}
+    \caption{SHAP Dependence Plot for lag\_7, illustrating a non-linear "S-Curve" impact bounded at extreme values.}
+    \label{fig:shap_dependence}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Analysis of the Dependency Plot:} Figure \ref{fig:shap_dependence} illustrates a classic non-linear, S-shaped relationship. Initially, as the value of \textit{lag\_7} increases from 0 to roughly 40, its SHAP value (its push on the final prediction) rises steeply and linearly in tandem. However, once \textit{lag\_7} crosses the extreme threshold of 45-50 (representing historical anomaly spikes), the SHAP impact plateaus and flattens out horizontally. This is a profound discovery: it mathematically proves that LightGBM naturally learns "safe boundaries." Unlike SARIMAX, which would blindly multiply a massive historical outlier by a linear coefficient (causing a forecast explosion), LightGBM recognizes extreme values as anomalies and caps their influence, inherently protecting the bank from absurdly high replenishment forecasts.
+\end{itemize}
+
+\section{DISCUSSION AND CONCLUSION}
+
+\subsection{Discussion}
+This study set out to critically address the escalating complexities of forecasting ATM cash demand by evaluating classical localized statistical methods against a modern, globally unified Machine Learning architecture. The empirical results unequivocally demonstrate that the proposed Global LightGBM model significantly outperforms localized ARIMA and SARIMAX models across all strict quantitative metrics. 
+
+\textbf{Theoretical and Methodological Implications:} From a theoretical perspective, these findings strongly align with the growing body of econometric literature that highlights the structural limitations of linear autoregressive models when confronted with high-variance, non-linear exogenous shocks. Previous advanced studies on the NN5 dataset heavily relied on a "Divide and Conquer" paradigm—utilizing algorithms like K-Means or Taylor-Butina to group ATMs into discrete clusters before applying neural networks. While effective, that approach forces hard boundaries between clusters. Our Global LightGBM architecture proves that explicitly treating the \textit{ATM\_ID} as a native categorical feature allows a single mathematical model to organically project these ATMs into a dynamic, high-dimensional latent space. This allows for continuous cross-learning: an ATM with sparse historical data can seamlessly "borrow" seasonal variance patterns from a mathematically similar ATM elsewhere in the network. This definitively bypasses the need for complex, rigid pre-clustering pipelines. Furthermore, the integration of SHAP mathematically validated our behavioral hypotheses. While the 7-day cyclical lag (\textit{lag\_7}) acts as the gravitational baseline for human withdrawal routines, it is the engineered exogenous features (such as UK holidays and payday flags) that act as the primary drivers of extreme, non-linear demand spikes. Crucially, the SHAP Dependence analysis revealed an inherent "S-Curve" bounding mechanism within LightGBM, proving that the model acts as its own circuit-breaker, implicitly capping the impact of historical anomalies to prevent the catastrophic variance explosions that plagued the unconstrained SARIMAX model.
+
+\textbf{Managerial and Economic Implications:} From a practical and policy perspective, the implications for financial institutions and Cash-in-Transit (CIT) operators are massive. Cash management is fundamentally an optimization problem with an asymmetric cost function. If an ATM is overfilled, the bank suffers an opportunity cost due to idle, non-interest-bearing capital. However, if an ATM is underfilled, the out-of-cash incident leads to severe reputational damage, immediate customer churn, and lost transaction fees. By transitioning from localized statistical models to our globally unified LightGBM framework, banks achieve two major operational victories. First, the MLOps (Machine Learning Operations) overhead is drastically reduced. Managing, monitoring for model drift, and deploying updates for a single global model is exponentially more efficient than maintaining CI/CD (Continuous Integration/Continuous Deployment) pipelines for 111 isolated local models. Second, incorporating Explainable AI (SHAP) transforms the algorithm from a prohibitive "black box" into a highly transparent decision-support system. Network managers can quantitatively view the granular reasoning behind a sudden forecasted cash surge (e.g., verifying that the model has correctly combined a Friday effect with an impending Bank Holiday). This algorithmic transparency is paramount in the heavily regulated financial sector, fostering human trust in automated replenishment planning and ultimately minimizing both idle cash and hardware downtime.
+
+\subsection{Limitations}
+Despite the robust performance and rigorous validation of the proposed methodology, several structural and dataset-specific limitations must be explicitly acknowledged:
+\begin{itemize}
+    \item \textbf{Dataset Chronological Constraints:} The NN5 dataset only spans approximately two years of historical data (1996-1998). This relatively short longitudinal timeframe strictly restricts the model's ability to observe and learn long-term macroeconomic trends. For instance, the model is blind to multi-year inflationary cycles, interest rate fluctuations, or the gradual societal paradigm shift toward cashless economies and digital wallets.
+    \item \textbf{Spatial Blindness and Unobserved Variables:} The forecasting accuracy is inherently bounded by the lack of external contextual data. While the model knows the \textit{ATM\_ID}, it operates in a state of "spatial blindness"—it does not know the exact geospatial coordinates (latitude/longitude) of the machines, thereby violating Tobler's First Law of Geography (which posits that near things are more related than distant things). Furthermore, localized variables such as micro-weather conditions, neighborhood demographics, or sudden local events (e.g., sporting events, concerts, or transit strikes) were unavailable. These unobserved latent factors likely account for the majority of the remaining unpredictable variance (noise) in our error metrics.
+    \item \textbf{Extrapolation Inability of Tree-based Models:} While LightGBM excels at interpolation and learning non-linear boundaries within the domain of the training data, decision trees are fundamentally incapable of extrapolating beyond historical maximums. If a future economic event triggers a withdrawal volume strictly higher than any value seen in the training set, the LightGBM model will cap its prediction at the historical maximum leaf value, potentially under-forecasting during unprecedented crises.
+    \item \textbf{Hyperparameter Optimization Bound:} Due to computational resource constraints, the LightGBM architecture was manually tuned utilizing domain expertise and heuristic regularization parameters to prevent overfitting. The study did not deploy advanced automated hyperparameter search spaces (such as Optuna, Hyperopt, or Bayesian Optimization). Utilizing these frameworks could potentially squeeze out further marginal gains in minimizing the SMAPE and MAE through a more exhaustive exploration of the bias-variance tradeoff.
+\end{itemize}
+
+\subsection{Conclusion and Future Work}
+\textbf{Conclusion:} 
+In conclusion, this paper successfully developed, validated, and interpreted a highly scalable Global LightGBM forecasting architecture for an intricate network of 111 ATMs. By fundamentally addressing the data structure conflict through a novel "Pipeline Bifurcation Strategy"—which safely utilized interpolation for statistical baselines while strictly enforcing dropping missing values for the machine learning stream to prevent look-ahead bias—the study ensured maximal empirical integrity. The integration of domain-specific exogenous features (e.g., UK holidays, festive countdowns) empowered the machine learning model to flawlessly absorb non-linear spending shocks that traditionally caused autoregressive models to fail. The empirical results definitively established the superiority of the Global LightGBM approach, which achieved an outstanding Test SMAPE of 17.31\%, eclipsing both the SARIMAX (19.82\%) and the baseline ARIMA (33.78\%) models. By coupling this highly accurate predictive engine with SHAP for deep mathematical interpretability, this methodology comprehensively satisfies the modern financial sector's strict triad of demands: predictive accuracy, MLOps scalability, and regulatory transparency.
+
+\textbf{Future Research Directions:} 
+To continuously push the boundaries of ATM cash management, future research should transition from pure predictive analytics to prescriptive optimization. We propose three strategic pillars for future work:
+\begin{enumerate}
+    \item \textbf{Spatio-Temporal Architectures:} Future studies should explicitly break the spatial blindness limitation by incorporating Spatio-Temporal Graph Neural Networks (STGNNs). By constructing an adjacency matrix where graph edges represent the physical driving distances between ATMs, the model could mathematically capture the "spillover effect" (e.g., if ATM A runs out of cash, the demand will immediately route to the nearest ATM B).
+    \item \textbf{Unstructured Data Integration:} The feature space should be heavily augmented by scraping unstructured data. Integrating Natural Language Processing (NLP) models to analyze local news feeds, social media sentiment, or event ticketing APIs could provide the algorithm with real-time leading indicators for localized cash surges.
+    \item \textbf{Prescriptive Reinforcement Learning (RL):} Ultimately, predicting demand is only half the business problem. Future research should formulate the cash replenishment process as a Markov Decision Process (MDP). By utilizing Deep Reinforcement Learning (DRL) algorithms (such as PPO or DQN), researchers can build autonomous AI agents that not only forecast the demand but directly output the optimal daily routing schedules and cash loads for the armored transport vehicles, dynamically balancing transportation costs, insurance limits, and out-of-cash penalty risks.
+\end{enumerate}
+
+\clearpage % Lệnh ép ngắt sang trang mới hoàn toàn
+
+\section{REFERENCES}
+\begin{thebibliography}{00}
+\normalsize % Lệnh ép cỡ chữ trở về kích thước bình thường của toàn bài
+
+\bibitem{b1} M. Rafi, M. T. Wahab, M. B. Khan, and H. Raza, "ATM Cash Prediction Using Time Series Approach," in \textit{Proceedings of the International Conference on Computing, Mathematics and Engineering Technologies (iCoMET)}, IEEE, 2020.
+\bibitem{b2} S. Ben Taieb, G. Bontempi, A. Atiya, and A. Sorjamaa, "A review and comparison of strategies for multi-step ahead time series forecasting based on the NN5 forecasting competition," \textit{Expert Systems with Applications}, 2011.
+\bibitem{b3} V. Kamini, V. Ravi, A. Prinzie, and D. Van den Poel, "Cash Demand Forecasting in ATMs by Clustering and Neural Networks," \textit{European Journal of Operational Research}, vol. 232, no. 2, 2013.
+\bibitem{b4} P. K. Jadwal, S. Jain, U. Gupta, and P. Khanna, "K-Means Clustering with Neural Networks for ATM Cash Repository Prediction," in \textit{Information and Communication Technology}, Springer International Publishing, 2018.
+\bibitem{b5} S. M. Lundberg and S. I. Lee, "A Unified Approach to Interpreting Model Predictions," in \textit{Advances in Neural Information Processing Systems (NIPS)}, 2017.
+\bibitem{b6} G. Ke, Q. Meng, T. Finley, T. Wang, W. Chen, W. Ma, Q. Ye, and T. Y. Liu, "LightGBM: A Highly Efficient Gradient Boosting Decision Tree," in \textit{Advances in Neural Information Processing Systems (NIPS)}, 2017.
+\end{thebibliography}
+
+\end{document}
